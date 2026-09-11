@@ -114,6 +114,21 @@ les runners macOS de GitHub, gratuits, et produit un **IPA non signé** : le
 format que la communauté installe avec AltStore, SideStore, TrollStore ou
 Sideloadly, qui le resignent avec le compte Apple de l’utilisateur.
 
+### Version minimale d’iOS
+
+L’app cible **iOS 15.1** au minimum. Ce chiffre est fixé dans `app.config.ts`
+via le plugin `expo-build-properties` (`ios.deploymentTarget`), et non laissé
+à la valeur par défaut d’Expo : la SDK 56 a fait passer ce défaut à 16.4, donc
+la SDK 55 est la dernière ligne à encore permettre 15.1. Le workflow
+`.github/workflows/ios.yml` vérifie ce chiffre à chaque build
+(`IPHONEOS_DEPLOYMENT_TARGET`) et échoue s’il dérive, et vérifie aussi que
+`store/sidestore.json` déclare bien la même valeur.
+
+**À chaque release**, ajouter une nouvelle entrée dans `versions[]` de
+[`store/sidestore.json`](../store/sidestore.json) avec le bon
+`minOSVersion` — rien ne l’automatise encore, seule la vérification CI
+empêche d’oublier ou de se tromper de valeur.
+
 ### Mise en place, une seule fois
 
 1. Créer le dépôt [`LB-XMB/app`](https://github.com/LB-XMB/app) sur GitHub, en
