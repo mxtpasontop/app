@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
+import { createDownloadResumable, type DownloadProgressData } from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
@@ -91,18 +92,52 @@ export async function downloadResourceFile({
       safeFileName(file.fileName)
     );
 
-    const downloaded = await File.downloadFileAsync(url, destination, {
-      idempotent: true,
-      signal,
-      onProgress: ({ bytesWritten, totalBytes }) =>
+    // expo-file-system's modern File.downloadFileAsync has no progress/abort
+    // support on this SDK line, so the legacy resumable API drives the actual
+    // transfer; the resulting file is then wrapped back into a modern `File`.
+    const resumable = createDownloadResumable(
+      url,
+      destination.uri,
+      // The legacy download API always overwrites the destination, matching
+      // the modern API's `idempotent: true` behaviour used previously.
+      {},
+      ({ totalBytesWritten, totalBytesExpectedToWrite }: DownloadProgressData) =>
         onProgress?.({
-          bytesWritten,
-          totalBytes,
-          ratio: totalBytes > 0 ? Math.min(1, bytesWritten / totalBytes) : null,
-        }),
-    });
+          bytesWritten: totalBytesWritten,
+          totalBytes: totalBytesExpectedToWrite,
+          ratio:
+            totalBytesExpectedToWrite > 0
+              ? Math.min(1, totalBytesWritten / totalBytesExpectedToWrite)
+              : null,
+        })
+    );
 
-    recordHistory(downloaded.size ?? file.sizeBytes);
+    let cancelled = false;
+    const onAbort = () => {
+      cancelled = true;
+      void resumable.pauseAsync();
+    };
+    signal?.addEventListener('abort', onAbort);
+
+    let result;
+    try {
+      result = await resumable.downloadAsync();
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+    }
+
+    if (!result || cancelled) {
+      try {
+        if (destination.exists) destination.delete();
+      } catch {
+        // Best-effort cleanup of a partial file; a stray temp file is
+        // harmless and will be cleared by clearDownloadedFiles() later.
+      }
+      return { status: 'cancelled' };
+    }
+
+    const downloaded = new File(result.uri);
+    recordHistory(downloaded.exists ? downloaded.size : file.sizeBytes);
 
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(downloaded.uri, {
@@ -112,7 +147,7 @@ export async function downloadResourceFile({
 
     return { status: 'saved', uri: downloaded.uri };
   } catch (error) {
-    if (signal?.aborted || (error as Error).name === 'AbortError') {
+    if (signal?.aborted) {
       return { status: 'cancelled' };
     }
     return { status: 'error', message: (error as Error).message };

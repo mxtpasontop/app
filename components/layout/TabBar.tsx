@@ -4,7 +4,7 @@ import { Box, HardDrive, House, Search, UserPen, type LucideIcon } from 'lucide-
 import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { BottomTabBarProps } from 'expo-router/build/react-navigation/bottom-tabs';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 
 import { useSettingsStore } from '@/stores/settings';
 import { Typography } from '@/ui/components';
