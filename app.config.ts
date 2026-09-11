@@ -96,6 +96,14 @@ const config: ExpoConfig = {
         enableLiveTextInteraction: false,
       },
     ],
+    [
+      'expo-build-properties',
+      {
+        ios: {
+          deploymentTarget: '15.1',
+        },
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,

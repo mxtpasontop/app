@@ -31,6 +31,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Pinned instead of relying on the runner's floating default Xcode, so a
+      # future image bump can't silently change the SDK a release is built
+      # with. 26.4.1 is the version Expo validated SDK 55/56 against and is
+      # comfortably above the >=26.0.0 expo-doctor requires for this SDK line.
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.4.1'
+
       - name: Read the version
         id: meta
         run: |
@@ -68,6 +77,24 @@ jobs:
 
       - name: Show the toolchain
         run: xcodebuild -version
+
+      # Guards against a regression the SDK-15.1 support depends on: a
+      # dependency bump that silently re-raises the deployment target above
+      # 15.1 (e.g. an accidental Expo SDK upgrade, or expo-build-properties
+      # being removed from app.config.ts) fails the build here instead of
+      # shipping an IPA that doesn't meet the stated minimum iOS version.
+      - name: Assert IPHONEOS_DEPLOYMENT_TARGET is 15.1
+        run: |
+          set -eu
+          WORKSPACE="$(ls -d ios/*.xcworkspace | head -1)"
+          SCHEME="$(basename "$WORKSPACE" .xcworkspace)"
+          ACTUAL="$(xcodebuild -showBuildSettings -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release \
+            | grep -m1 'IPHONEOS_DEPLOYMENT_TARGET' | awk '{print $3}')"
+          echo "Resolved IPHONEOS_DEPLOYMENT_TARGET=$ACTUAL"
+          if [ "$ACTUAL" != "15.1" ]; then
+            echo "::error::Expected IPHONEOS_DEPLOYMENT_TARGET=15.1, got '$ACTUAL'. A dependency likely reverted the deployment target (e.g. a stray newer expo-* package, or app.config.ts's expo-build-properties override was removed)." >&2
+            exit 1
+          fi
 
       - name: Build without signing
         run: |
