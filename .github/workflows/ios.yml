@@ -96,6 +96,21 @@ jobs:
             exit 1
           fi
 
+      # store/sidestore.json is hand-maintained and nothing else ties it to
+      # the real build config, so it can drift silently (it already had a
+      # stale "15.0" while the actual SDK 57 build required 16.4). Only
+      # checked on real releases, matching the publish step below.
+      - name: Verify sidestore.json minOSVersion matches the enforced deployment target
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          set -eu
+          EXPECTED="15.1"
+          ACTUAL="$(node -e "console.log(require('./store/sidestore.json').apps[0].versions[0].minOSVersion)")"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::store/sidestore.json minOSVersion ('$ACTUAL') does not match the required iOS deployment target ('$EXPECTED'). Prepend a new versions[] entry with the correct value before releasing." >&2
+            exit 1
+          fi
+
       - name: Build without signing
         run: |
           set -eu
