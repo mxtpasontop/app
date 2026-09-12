@@ -94,7 +94,7 @@ jobs:
           # settings they don't actually use, so a plain `grep -m1` can grab
           # the wrong target's value. Use -json and pick the app's own target
           # by name instead of trusting whichever block appears first.
-          ACTUAL="$(xcodebuild -showBuildSettings -json -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -sdk iphoneos 2>/dev/null \
+          ACTUAL="$(xcodebuild -showBuildSettings -json -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -sdk iphoneos -destination "generic/platform=iOS" 2>/dev/null \
             | SCHEME="$SCHEME" node -e "
                 let d='';
                 process.stdin.on('data', c => d += c);
@@ -136,6 +136,7 @@ jobs:
             -scheme "$SCHEME" \
             -configuration Release \
             -sdk iphoneos \
+            -destination "generic/platform=iOS" \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
