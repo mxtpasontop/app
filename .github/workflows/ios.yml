@@ -88,8 +88,22 @@ jobs:
           set -eu
           WORKSPACE="$(ls -d ios/*.xcworkspace | head -1)"
           SCHEME="$(basename "$WORKSPACE" .xcworkspace)"
-          ACTUAL="$(xcodebuild -showBuildSettings -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -sdk iphoneos \
-            | grep -m1 'IPHONEOS_DEPLOYMENT_TARGET' | awk '{print $3}')"
+          # -showBuildSettings dumps one block per target in the scheme
+          # (the app, plus every Pod/resource-bundle target) — some of those
+          # (e.g. resource bundles) can report an unresolved placeholder for
+          # settings they don't actually use, so a plain `grep -m1` can grab
+          # the wrong target's value. Use -json and pick the app's own target
+          # by name instead of trusting whichever block appears first.
+          ACTUAL="$(xcodebuild -showBuildSettings -json -workspace "$WORKSPACE" -scheme "$SCHEME" -configuration Release -sdk iphoneos 2>/dev/null \
+            | SCHEME="$SCHEME" node -e "
+                let d='';
+                process.stdin.on('data', c => d += c);
+                process.stdin.on('end', () => {
+                  const targets = JSON.parse(d);
+                  const entry = targets.find(t => t.target === process.env.SCHEME) ?? targets[0];
+                  process.stdout.write(String(entry.buildSettings.IPHONEOS_DEPLOYMENT_TARGET ?? ''));
+                });
+              ")"
           echo "Resolved IPHONEOS_DEPLOYMENT_TARGET=$ACTUAL"
           if [ "$ACTUAL" != "15.1" ]; then
             echo "::error::Expected IPHONEOS_DEPLOYMENT_TARGET=15.1, got '$ACTUAL'. A dependency likely reverted the deployment target (e.g. a stray newer expo-* package, or app.config.ts's expo-build-properties override was removed)." >&2
